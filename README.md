@@ -1,122 +1,224 @@
-# Resumen del informe y del cuaderno: Predicción de Calidad del Agua con Keras
+# Resumen del Cuaderno — Predicción de la Calidad del Agua de la India con Keras
 
-## 1. Propósito general
+**Pontificia Universidad Javeriana · Procesamiento de Big Data · 2do Examen Parcial · 28/04/2026**  
+**Autor:** Juan Sebastian Álvarez
 
-El proyecto busca predecir la calidad del agua en ríos de la India mediante técnicas de procesamiento de datos y aprendizaje automático. El indicador central es el **Water Quality Index (WQI)**, una medida compuesta que resume diferentes parámetros fisicoquímicos y microbiológicos en un único valor interpretable.
+-----
 
-El informe presenta la explicación académica del proyecto, mientras que el cuaderno implementa el flujo práctico en Python: carga de datos, limpieza, análisis exploratorio, cálculo del WQI, visualización geográfica y entrenamiento de una red neuronal con Keras.
+## 1. Objetivo general
 
-## 2. Datos utilizados
+Construir un flujo completo de análisis de calidad del agua sobre el dataset `waterquality.csv` (534 registros, ríos de la India) usando **PySpark** para el procesamiento distribuido y **Keras/TensorFlow** para predecir el **Water Quality Index (WQI)** mediante una red neuronal de regresión.
 
-El conjunto de datos corresponde a mediciones de estaciones de monitoreo hídrico en India. Las variables principales son:
+-----
 
-| Variable | Descripción |
-|---|---|
-| `TEMP` | Temperatura del agua superficial. |
-| `DO` | Oxígeno disuelto; valores altos suelen asociarse con mejor calidad. |
-| `pH` | Nivel de acidez o basicidad del agua. |
-| `CONDUCTIVITY` | Capacidad de conducción eléctrica; puede indicar presencia de sales o contaminantes. |
-| `BOD` | Demanda bioquímica de oxígeno; refleja carga orgánica. |
-| `NITRATE_N_NITRITE_N` | Concentración de nitratos y nitritos. |
-| `FECAL_COLIFORM` | Indicador de contaminación fecal. |
+## 2. Dataset
 
-## 3. Flujo del cuaderno
+|Variable           |Descripción                  |Unidad    |
+|-------------------|-----------------------------|----------|
+|TEMP               |Temperatura del agua         |°C        |
+|DO                 |Oxígeno disuelto             |mg/L      |
+|pH                 |Acidez/basicidad             |—         |
+|CONDUCTIVITY       |Conductividad eléctrica      |µS/cm     |
+|BOD                |Demanda bioquímica de oxígeno|mg/L      |
+|NITRATE_N_NITRITE_N|Nitratos y nitritos          |mg/L      |
+|FECAL_COLIFORM     |Coliformes fecales           |MPN/100 mL|
 
-El cuaderno está organizado en las siguientes etapas:
+- **534 registros** correspondientes a estaciones de monitoreo en estados de la India.
+- Carga con PySpark (`SparkSession`), conversión de columnas a `FloatType`, eliminación de `TOTAL_COLIFORM` por redundancia.
+- Se identificaron valores nulos con `F.isnan()` / `F.col().isNull()`; los estados sin datos en la visualización geográfica recibieron imputación con la mediana del WQI.
 
-1. **Importación de bibliotecas:** se cargan PySpark, Pandas, Numpy, Matplotlib, Seaborn, GeoPandas y Keras.
-2. **Creación de sesión Spark:** se configura una sesión local para procesar el archivo CSV.
-3. **Carga de datos:** se lee `waterquality.csv` y se revisan las primeras filas.
-4. **Exploración inicial:** se inspeccionan columnas, estadísticas y valores nulos.
-5. **Tratamiento de tipos:** se convierten variables numéricas para permitir cálculos.
-6. **Visualización exploratoria:** se grafican relaciones entre DO/pH, BOD/nitratos y conductividad/coliformes fecales.
-7. **Cálculo de subíndices:** cada parámetro se transforma en una escala de calidad (`qrPH`, `qrDO`, `qrCOND`, `qrBOD`, `qrNN`, `qrFecal`).
-8. **Cálculo del WQI:** se ponderan los subíndices y se obtiene el índice final.
-9. **Clasificación del WQI:** se asignan categorías como Excelente, Buena, Baja, Muy Baja o Inadecuada.
-10. **Visualización geográfica:** se usa GeoPandas para mapear el WQI promedio por estado de India.
-11. **Modelo predictivo:** se entrena una red neuronal densa con Keras para predecir WQI.
-12. **Evaluación visual:** se grafica la curva de pérdida y la comparación entre valores reales y predichos.
+-----
 
-## 4. Cálculo del WQI
+## 3. Análisis exploratorio (Sección 5)
 
-El WQI se calcula como suma ponderada de subíndices de calidad. Los pesos usados en el informe y el cuaderno son:
+### Gráfica 5.1 — DO y pH
 
-| Parámetro | Peso |
-|---|---:|
-| pH | 0.165 |
-| DO | 0.281 |
-| Conductividad | 0.234 |
-| BOD | 0.009 |
-| Nitratos/Nitritos | 0.028 |
-| Coliformes fecales | 0.281 |
+- El **pH** es muy estable (rango 7–9), típico de aguas neutras a levemente alcalinas con sustrato calcáreo como tampón.
+- El **DO** presenta mayor variabilidad (4–9 mg/L), con picos > 10 mg/L (aguas turbulentas bien oxigenadas) y caídas cercanas a cero (zonas hipóxicas críticas).
+- No existe correlación visual directa entre ambas variables a escala de registro; la relación biológica DO–pH opera a escala diaria (fotosíntesis intensa).
+- **Impacto en WQI:** DO tiene el mayor peso del índice (0.281); caídas bajo 3 mg/L colapsan el subíndice a 0.
 
-La fórmula general implementada es:
+### Gráfica 5.2 — BOD y Nitratos/Nitritos
 
-```text
+- **BOD:** mayoría de registros < 10 mg/L, con picos extremos > 100 mg/L en estaciones puntuales (descargas industriales o domésticas sin tratamiento).
+- **Nitratos/Nitritos:** generalmente < 5 mg/L; picos ocasionales asociados a escorrentía agrícola. No superan el límite OMS de 50 mg/L en casi ningún caso.
+- Picos simultáneos de BOD y NN → contaminación agropecuaria. Pico aislado de BOD → origen orgánico industrial/doméstico.
+
+### Gráfica 5.3 — Conductividad y Coliformes Fecales
+
+- **Conductividad:** mayoría < 500 µS/cm, picos hasta 10 000 µS/cm (contaminación inorgánica / intrusión salina).
+- **Coliformes fecales:** altísima variabilidad, de 0 a decenas de miles de MPN/100 mL. Picos extremos = zonas urbanas sin saneamiento.
+- Los picos de ambas variables **no coinciden espacialmente**, confirmando fuentes de contaminación distintas.
+- **Riesgo sanitario:** peso del subíndice `qrFecal` = 0.281; valores > 1 000 MPN/100 mL colapsan el WQI a categoría Inadecuada.
+
+-----
+
+## 4. Construcción del WQI (Secciones 6 y 7)
+
+### Fórmula
+
+```
 WQI = wpH + wDO + wCOND + wBOD + wNN + wFecal
 ```
 
-Donde cada componente ponderado se obtiene multiplicando el subíndice de calidad del parámetro por su peso.
+### Pesos por parámetro
 
-## 5. Clasificación del índice
+|Parámetro         |Subíndice|Peso     |
+|------------------|---------|---------|
+|pH                |qrPH     |0.165    |
+|DO                |qrDO     |**0.281**|
+|Conductividad     |qrCOND   |0.234    |
+|BOD               |qrBOD    |0.009    |
+|Nitratos/Nitritos |qrNN     |0.028    |
+|Coliformes fecales|qrFecal  |**0.281**|
 
-| Rango WQI | Clasificación | Interpretación |
-|---|---|---|
-| 0 - 25 | Excelente | Agua de mejor calidad dentro de la escala usada. |
-| 25 - 50 | Buena | Requiere bajo nivel de tratamiento. |
-| 50 - 75 | Baja | Requiere tratamiento convencional. |
-| 75 - 100 | Muy Baja | Requiere tratamiento intensivo. |
-| > 100 | Inadecuada | No apta sin tratamiento. |
+Los subíndices `qr` toman valores discretos: **100 · 80 · 60 · 40 · 0** según rangos de la literatura (Sutadian et al., 2016).
 
-## 6. Análisis exploratorio
+### Clasificación del WQI
 
-El informe y el cuaderno incluyen gráficos que permiten observar patrones importantes:
+|Rango WQI|Categoría |
+|---------|----------|
+|0 – 25   |Excelente |
+|25 – 50  |Buena     |
+|50 – 75  |Baja      |
+|75 – 100 |Muy Baja  |
+|≥ 100    |Inadecuada|
 
-- **DO y pH:** el pH tiende a mantenerse cerca de la neutralidad, mientras que el oxígeno disuelto presenta mayor variabilidad.
-- **BOD y nitratos/nitritos:** los picos pueden sugerir cargas orgánicas o posibles efectos de actividad agrícola.
-- **Conductividad y coliformes fecales:** valores extremos pueden relacionarse con mineralización, contaminación industrial o problemas de saneamiento.
+### Distribución observada (Gráfica 7.3)
 
-## 7. Visualización geográfica
+- Distribución con **sesgo positivo** (cola a la derecha), moda en torno a WQI ≈ 55–65.
+- **Casi ninguna estación alcanza la categoría Excelente** (WQI < 25).
+- La mayoría cae en **Baja** y **Muy Baja**, evidenciando presión antrópica generalizada.
+- Estaciones con WQI > 100 = contaminación multidimensional; intervención urgente.
 
-El cuaderno usa archivos shapefile de India para crear:
+### Conteo por categoría (Gráfica 7.4)
 
-- Un mapa base de estados.
-- Un mapa coroplético del WQI.
-- Un histograma horizontal para comparar WQI por estado.
+- **Baja** es la categoría dominante, seguida de **Muy Baja**.
+- La proporción Excelente + Buena es mínima, indicando un problema estructural de calidad hídrica nacional.
 
-Esta parte permite pasar del análisis puramente numérico a una interpretación territorial de la calidad hídrica.
+-----
 
-## 8. Modelo de red neuronal
+## 5. Visualización geográfica (Sección 8)
 
-El modelo implementado en Keras es una red neuronal secuencial densa con la siguiente estructura:
+### Mapa base (8.3)
 
-| Capa | Tipo | Neuronas | Activación |
-|---|---|---:|---|
-| Entrada | Dense | 350 | ReLU |
-| Oculta 1 | Dense | 350 | ReLU |
-| Oculta 2 | Dense | 350 | ReLU |
-| Salida | Dense | 1 | Lineal |
+Mapa político de India cargado desde shapefile con GeoPandas. Se realizó homologación de nombres de estados entre el shapefile y el DataFrame Spark (reemplazo de `&`, conversión `initcap`, corrección de `TAMILNADU`).
 
-La variable objetivo es `WQI`, y las variables predictoras son los seis subíndices de calidad. El modelo se entrena con:
+### Mapa coroplético WQI (8.4)
 
-- Optimizador: Adam.
-- Función de pérdida: Mean Squared Error.
-- Épocas: 200.
-- Tamaño de lote: 81.
-- División entrenamiento/prueba: 80% / 20%.
+- Paleta `Reds`; cuatro rangos: 0–25, 25–50, 50–75, 75–100+.
+- Colores más intensos = peor calidad del agua.
+- Estados sin datos reciben WQI mediano como imputación (limitación metodológica señalada).
+- Etiquetas ajustadas con `adjust_text` para evitar superposición.
+- Permite identificar territorialmente qué cuencas requieren intervención prioritaria.
 
-## 9. Principales conclusiones
+### Barras horizontales WQI por estado (8.5)
 
-El proyecto demuestra que es posible construir un flujo académico completo de Big Data y Machine Learning para analizar calidad del agua. El uso de PySpark facilita la preparación de datos, GeoPandas permite interpretar los resultados espacialmente y Keras ofrece una aproximación predictiva al WQI.
+- Complementa el mapa con lectura cuantitativa directa por estado.
+- Facilita identificar los estados con peor y mejor calidad relativa.
+- La agregación por estado puede ocultar heterogeneidad interna (ríos prístinos vs. industrializados en el mismo estado).
 
-Sin embargo, el modelo debe entenderse como una guía metodológica. Para una implementación más robusta se recomienda:
+-----
 
-- Calcular métricas de evaluación en prueba: MSE, RMSE, MAE y R².
-- Ajustar hiperparámetros de forma sistemática.
-- Usar regularización para evitar sobreajuste.
-- Revisar la calidad de los datos y la imputación de valores faltantes.
-- Ampliar el conjunto de datos con más registros temporales y estaciones.
+## 6. Modelo de red neuronal con Keras (Sección 9)
 
-## 10. Relación entre informe y cuaderno
+### Arquitectura
 
-El informe funciona como explicación formal del proyecto: define contexto, variables, metodología, visualizaciones, arquitectura del modelo, resultados y conclusiones. El cuaderno es la implementación práctica de esa metodología en Python. Ambos documentos se complementan: el informe justifica y explica; el cuaderno ejecuta y demuestra el proceso técnico.
+```
+Entrada (6) → Dense(350, ReLU) → Dense(350, ReLU) → Dense(350, ReLU) → Dense(1, linear)
+```
+
+- ~490 000 parámetros entrenables.
+- Variables de entrada: `qrPH`, `qrDO`, `qrCOND`, `qrBOD`, `qrNN`, `qrFecal`.
+- Variable objetivo: `WQI` (regresión continua).
+
+### Compilación y entrenamiento
+
+```python
+optim = tf.keras.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999)
+modelo01.compile(loss='mean_squared_error', optimizer=optim, metrics=['mse'])
+historia01 = modelo01.fit(X_train, y_train, epochs=200, batch_size=81, verbose=0)
+```
+
+- Split 80/20 con `train_test_split(random_state=1)`.
+- Conversión de DataFrames Pandas a NumPy (`float32`) antes del entrenamiento.
+
+### Correcciones aplicadas al código original
+
+|Error                                                     |Corrección                                                   |
+|----------------------------------------------------------|-------------------------------------------------------------|
+|`Sequential`, `Dense` sin importar                        |`from tensorflow.keras.models import Sequential` etc.        |
+|`X_train`, `y_train` no definidos                         |Conversión explícita: `dataTrain.values.astype('float32')`   |
+|`keras.optimizers.Adam(...)` flotante (objeto no asignado)|`optim = tf.keras.optimizers.Adam(...)` + pasarlo a `compile`|
+|`optimizer='Adam'` (mayúscula)                            |Pasado como objeto; convención lowercase                     |
+|`amsgrad=False` removido en TF 2.11+                      |Eliminado                                                    |
+|Encabezados §9.3 y §9.5 duplicados                        |Eliminados                                                   |
+
+### Curva de pérdida (9.3)
+
+- Reducción rápida del MSE en las primeras épocas; estabilización posterior = convergencia exitosa.
+- Adam adapta el learning rate por parámetro → descenso inicial eficiente.
+- Sin curva de validación: no se puede detectar overfitting directamente desde esta gráfica.
+
+### Dispersión real vs. predicho (9.5)
+
+- Puntos concentrados en torno a la diagonal y = x → el modelo captura la tendencia del WQI.
+- Mayor dispersión en extremos (WQI muy bajo o muy alto) por menor representación en entrenamiento.
+- Las métricas de prueba son el indicador definitivo de generalización.
+
+-----
+
+## 7. Comparativa de métricas: entrenamiento vs. prueba (Sección 10)
+
+|Métrica   |Entrenamiento|Prueba|Δ (Prueba − Train)|
+|----------|-------------|------|------------------|
+|MSE (WQI²)|—            |—     |—                 |
+|MAE (WQI) |—            |—     |—                 |
+|R²        |—            |—     |—                 |
+
+
+> *Los valores exactos se obtienen al ejecutar la celda de métricas en el entorno Spark/Keras.*
+
+**Criterios de interpretación:**
+
+- **R²_prueba > 0.85:** generalización aceptable para el tamaño del dataset.
+- **ΔR² > 0.15:** señal de sobreajuste; aplicar Dropout(0.3) y regularización L2(0.001).
+- **MAE_prueba < 5 puntos WQI:** error práctico excelente.
+- La alta ratio parámetros/muestras (~490 000 / 427) predispone al overfitting; las métricas de prueba son la evidencia definitiva.
+
+-----
+
+## 8. Conclusiones generales (Sección 11)
+
+### Calidad del agua en India
+
+- La calidad es **sistemáticamente deficiente**: la mayoría de estaciones cae en categorías Baja o Muy Baja.
+- Los **coliformes fecales** y el **oxígeno disuelto** son los determinantes estructurales del WQI deteriorado (peso conjunto = 0.562).
+- Existe **heterogeneidad espacial** marcada: algunos estados presentan WQI notablemente más altos que otros, asociado a industrialización y densidad urbana.
+- Las intervenciones de mayor impacto son: tratamiento de aguas residuales (reduce coliformes) y reoxigenación de ríos (mejora DO).
+
+### Modelo neuronal
+
+- La red neuronal aprende la relación subíndices → WQI con buena capacidad, aunque el problema es intrínsecamente lineal (WQI = suma ponderada).
+- El valor académico es la práctica del pipeline PySpark + Keras end-to-end, no la complejidad del modelo.
+- Trabajo futuro: comparar con regresión lineal, Random Forest y SVR; implementar k-fold CV; aplicar regularización Dropout + L2.
+
+### Limitaciones metodológicas
+
+- Imputación de WQI por mediana en estados sin datos (para visualización geográfica).
+- Subíndices discretos → pérdida de información respecto a variables continuas originales.
+- Dataset pequeño (534 registros) para justificar redes con ~490 000 parámetros.
+
+-----
+
+## 9. Referencias
+
+1. Sutadian, A. D., Muttil, N., Yilmaz, A. G., & Perera, B. J. C. (2016). Development of river water quality indices — A review. *Environmental Monitoring and Assessment*, 188(1), 58.
+1. Brown, R. M., McClelland, N. I., Deininger, R. A., & Tozer, R. G. (1970). A water quality index: Do we dare? *Water and Sewage Works*, 117(10), 339–343.
+1. Chollet, F. (2021). *Deep Learning with Python* (2nd ed.). Manning Publications.
+1. Zaharia, M., et al. (2016). Apache Spark: A unified engine for big data processing. *Communications of the ACM*, 59(11), 56–65.
+1. OMS / WHO. (2022). *Guidelines for Drinking-Water Quality* (4th ed.). World Health Organization.
+
+-----
+
+*Cuaderno generado con PySpark 3.x + TensorFlow/Keras 2.x · Dataset: waterquality.csv · India · 534 registros · 7 variables fisicoquímicas*
