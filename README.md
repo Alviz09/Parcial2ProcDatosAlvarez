@@ -1,4 +1,4 @@
-#Predicción de la Calidad del Agua de la India con Keras
+# Predicción de la Calidad del Agua de la India con Keras
 
 **Pontificia Universidad Javeriana · Procesamiento de Big Data · 2do Examen Parcial · 28/04/2026**  
 **Autor:** Juan Sebastian Álvarez
