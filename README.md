@@ -165,30 +165,9 @@ historia01 = modelo01.fit(X_train, y_train, epochs=200, batch_size=81, verbose=0
 - Puntos concentrados en torno a la diagonal y = x → el modelo captura la tendencia del WQI.
 - Mayor dispersión en extremos (WQI muy bajo o muy alto) por menor representación en entrenamiento.
 - Las métricas de prueba son el indicador definitivo de generalización.
-
 -----
 
-## 7. Comparativa de métricas: entrenamiento vs. prueba (Sección 10)
-
-|Métrica   |Entrenamiento|Prueba|Δ (Prueba − Train)|
-|----------|-------------|------|------------------|
-|MSE (WQI²)|—            |—     |—                 |
-|MAE (WQI) |—            |—     |—                 |
-|R²        |—            |—     |—                 |
-
-
-> *Los valores exactos se obtienen al ejecutar la celda de métricas en el entorno Spark/Keras.*
-
-**Criterios de interpretación:**
-
-- **R²_prueba > 0.85:** generalización aceptable para el tamaño del dataset.
-- **ΔR² > 0.15:** señal de sobreajuste; aplicar Dropout(0.3) y regularización L2(0.001).
-- **MAE_prueba < 5 puntos WQI:** error práctico excelente.
-- La alta ratio parámetros/muestras (~490 000 / 427) predispone al overfitting; las métricas de prueba son la evidencia definitiva.
-
------
-
-## 8. Conclusiones generales (Sección 11)
+## 7. Conclusiones generales (Sección 11)
 
 ### Calidad del agua en India
 
@@ -211,7 +190,7 @@ historia01 = modelo01.fit(X_train, y_train, epochs=200, batch_size=81, verbose=0
 
 -----
 
-## 9. Referencias
+## 8. Referencias
 
 1. Sutadian, A. D., Muttil, N., Yilmaz, A. G., & Perera, B. J. C. (2016). Development of river water quality indices — A review. *Environmental Monitoring and Assessment*, 188(1), 58.
 1. Brown, R. M., McClelland, N. I., Deininger, R. A., & Tozer, R. G. (1970). A water quality index: Do we dare? *Water and Sewage Works*, 117(10), 339–343.
